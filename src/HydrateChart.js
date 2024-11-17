@@ -15,7 +15,8 @@ Modal.setAppElement('#root');  // Set the app element for accessibility
 
 function HydrateChart() {
   const [data, setData] = useState([]);
-  const [hydrateEvents, setHydrateEvents] = useState([]); // New state for hydrate events
+  const [hydrateEvents, setHydrateEvents] = useState([]); // All hydrate events
+  const [groupedHydrateEvents, setGroupedHydrateEvents] = useState([]); // Grouped hydrate events
   const [referenceLines, setReferenceLines] = useState([]);
   const [activeLines, setActiveLines] = useState({
     InstantaneousVolume: true,
@@ -72,39 +73,20 @@ function HydrateChart() {
         index: index // Keep track of the index for reference lines
       }));
       setData(processedData);
-      setHydrateEvents(response.data.hydrateEvents); // Set hydrate events
+      setHydrateEvents(response.data.hydrateEvents); // Set all hydrate events
+
+      // Process and group hydrate events
+      const grouped = groupHydrateEvents(response.data.hydrateEvents, 60 * 60 * 1000); // 1 hour in ms
+      setGroupedHydrateEvents(grouped);
 
       // Initialize hydrate info based on all data
       updateHydrateInfo(processedData);
 
-      // Calculate reference lines
-      const refLines = [];
-      let isHydrating = false;
-
-      for (let i = 1; i < processedData.length; i++) {
-        const previousChance = processedData[i - 1].HydrateChance;
-        const currentChance = processedData[i].HydrateChance;
-
-        // Enter hydrating state when crossing upward over 50%
-        if (!isHydrating && currentChance >= 50) {
-          isHydrating = true;
-          refLines.push({
-            index: processedData[i].index,
-            Time: processedData[i].Time,
-            color: 'orange',
-          });
-        }
-
-        // Exit hydrating state when dropping below 20%
-        if (isHydrating && currentChance < 20) {
-          isHydrating = false;
-          refLines.push({
-            index: processedData[i].index,
-            Time: processedData[i].Time,
-            color: 'gray',
-          });
-        }
-      }
+      // Calculate reference lines based on grouped hydrate events
+      const refLines = grouped.map(event => ({
+        Time: new Date(event.Time).getTime(),
+        color: 'red', // Choose a distinct color for grouped events
+      }));
 
       setReferenceLines(refLines);
       setLoading(false); // End loading
@@ -123,6 +105,33 @@ function HydrateChart() {
       alert('An error occurred while uploading the file.');
       setLoading(false); // End loading
     });
+  };
+
+  // Function to group hydrate events based on a maximum interval (e.g., 1 hour)
+  const groupHydrateEvents = (events, maxInterval) => {
+    if (!events || events.length === 0) return [];
+
+    const grouped = [];
+    let currentGroup = [events[0]];
+
+    for (let i = 1; i < events.length; i++) {
+      const currentEventTime = new Date(events[i].Time).getTime();
+      const previousEventTime = new Date(events[i - 1].Time).getTime();
+      const interval = currentEventTime - previousEventTime;
+
+      if (interval <= maxInterval) {
+        currentGroup.push(events[i]);
+      } else {
+        // Push the first event of the current group as the representative
+        grouped.push(currentGroup[0]);
+        currentGroup = [events[i]];
+      }
+    }
+
+    // Push the last group
+    grouped.push(currentGroup[0]);
+
+    return grouped;
   };
 
   // Function to update hydrate info based on visible data
@@ -325,6 +334,7 @@ function HydrateChart() {
       {loading && <p className="loading-message">Loading...</p>}
       {data.length > 0 ? (
         <>
+          {/* Chart Controls */}
           <div className="chart-controls">
             <button onClick={handleResetZoom} title="Reset View" aria-label="Reset View">
               <FaSync />
@@ -345,6 +355,7 @@ function HydrateChart() {
               <FaSave />
             </button>
           </div>
+          {/* Chart Container */}
           <div className="chart-container">
             <ResponsiveContainer width="100%" height={600}>
               <LineChart
@@ -439,14 +450,15 @@ function HydrateChart() {
                     strokeWidth={2}
                   />
                 )}
-                {/* Add Reference Lines */}
-                {referenceLines.map((refLine, index) => (
+                {/* Add Reference Lines for Grouped Hydrate Events */}
+                {groupedHydrateEvents.map((refLine, index) => (
                   <ReferenceLine
                     key={index}
                     x={refLine.Time}
                     stroke={refLine.color}
                     strokeDasharray="3 3"
                     yAxisId="left"
+                    label={{ value: 'Hydrate Event', position: 'top', fill: refLine.color }}
                     ifOverflow="extendDomain"
                   />
                 ))}
@@ -463,7 +475,7 @@ function HydrateChart() {
             </div>
           )}
           {/* Hydrate Events List */}
-          {hydrateEvents.length > 0 && (
+          {groupedHydrateEvents.length > 0 && (
             <div className="hydrate-events-section">
               <h3>Hydrate Instances</h3>
               <table className="hydrate-events-table">
@@ -475,7 +487,7 @@ function HydrateChart() {
                   </tr>
                 </thead>
                 <tbody>
-                  {hydrateEvents.map((event, index) => (
+                  {groupedHydrateEvents.map((event, index) => (
                     <tr key={index}>
                       <td>{new Date(event.Time).toLocaleString()}</td>
                       <td>{event.HydrateChance.toFixed(2)}</td>
