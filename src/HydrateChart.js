@@ -1,6 +1,6 @@
 // HydrateChart.js
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -15,11 +15,13 @@ Modal.setAppElement('#root');  // Set the app element for accessibility
 
 function HydrateChart() {
   const [data, setData] = useState([]);
+  const [hydrateEvents, setHydrateEvents] = useState([]); // New state for hydrate events
   const [referenceLines, setReferenceLines] = useState([]);
   const [activeLines, setActiveLines] = useState({
     InstantaneousVolume: true,
     SetpointVolume: true,
     ValvePercentOpen: true,
+    PotentialHydrateFix: true,  // Added PotentialHydrateFix
     HydrateChance: true,
   });
   const [file, setFile] = useState(null);
@@ -34,6 +36,10 @@ function HydrateChart() {
     yAxisMin: null,
     yAxisMax: null,
   });
+  const [hydrateInfo, setHydrateInfo] = useState({
+    hydrateChance: null,
+    potentialFix: null,
+  }); // Combined state for hydrate info
 
   const chartRef = useRef(null);
 
@@ -60,12 +66,16 @@ function HydrateChart() {
       }
     })
     .then(response => {
-      const processedData = response.data.map((item, index) => ({
+      const processedData = response.data.data.map((item, index) => ({
         ...item,
         Time: new Date(item.Time).getTime(), // Convert to timestamp in milliseconds
         index: index // Keep track of the index for reference lines
       }));
       setData(processedData);
+      setHydrateEvents(response.data.hydrateEvents); // Set hydrate events
+
+      // Initialize hydrate info based on all data
+      updateHydrateInfo(processedData);
 
       // Calculate reference lines
       const refLines = [];
@@ -113,6 +123,26 @@ function HydrateChart() {
       alert('An error occurred while uploading the file.');
       setLoading(false); // End loading
     });
+  };
+
+  // Function to update hydrate info based on visible data
+  const updateHydrateInfo = (visibleData) => {
+    if (visibleData.length > 0) {
+      // Find the point with the maximum HydrateChance
+      const maxHydratePoint = visibleData.reduce((maxPoint, currentPoint) => {
+        return currentPoint.HydrateChance > maxPoint.HydrateChance ? currentPoint : maxPoint;
+      }, visibleData[0]);
+
+      setHydrateInfo({
+        hydrateChance: maxHydratePoint.HydrateChance,
+        potentialFix: maxHydratePoint.PotentialHydrateFix,
+      });
+    } else {
+      setHydrateInfo({
+        hydrateChance: null,
+        potentialFix: null,
+      });
+    }
   };
 
   // Handle toggling lines on click
@@ -268,6 +298,22 @@ function HydrateChart() {
     yRight: [0, 100],
   };
 
+  // Update hydrate info when data or zoom changes
+  useEffect(() => {
+    if (data.length > 0) {
+      const [xMin, xMax] = currentDomain.x;
+
+      // Handle 'auto' domains
+      const minX = xMin === 'auto' ? Math.min(...data.map(dp => dp.Time)) : xMin;
+      const maxX = xMax === 'auto' ? Math.max(...data.map(dp => dp.Time)) : xMax;
+
+      // Filter data points within the current x-axis domain
+      const visibleData = data.filter(dp => dp.Time >= minX && dp.Time <= maxX);
+
+      updateHydrateInfo(visibleData);
+    }
+  }, [currentDomain, data]);
+
   return (
     <div className="hydrate-chart-container">
       <h2 className="hydrate-chart-title">Hydrate Formation Detection with Hydrate Chance Over Time</h2>
@@ -311,6 +357,7 @@ function HydrateChart() {
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
               >
+                {/* Chart components */}
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="Time"
@@ -370,6 +417,17 @@ function HydrateChart() {
                     strokeDasharray="5 5"
                   />
                 )}
+                {activeLines.PotentialHydrateFix && (
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="PotentialHydrateFix"
+                    stroke="#ff00ff"
+                    name="Potential Hydrate Fix"
+                    dot={false}
+                    strokeDasharray="3 4 5 2"
+                  />
+                )}
                 {activeLines.HydrateChance && (
                   <Line
                     yAxisId="right"
@@ -395,6 +453,39 @@ function HydrateChart() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {/* Display the chance of hydrate and potential fix under the chart */}
+          {hydrateInfo.hydrateChance !== null && (
+            <div className="hydrate-info">
+              <p>Chance of Hydrate: {hydrateInfo.hydrateChance.toFixed(2)}%</p>
+              {hydrateInfo.potentialFix !== null && (
+                <p>Potential Fix: Reduce valve percent open to {hydrateInfo.potentialFix.toFixed(2)}%</p>
+              )}
+            </div>
+          )}
+          {/* Hydrate Events List */}
+          {hydrateEvents.length > 0 && (
+            <div className="hydrate-events-section">
+              <h3>Hydrate Instances</h3>
+              <table className="hydrate-events-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Hydrate Chance (%)</th>
+                    <th>Potential Fix (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hydrateEvents.map((event, index) => (
+                    <tr key={index}>
+                      <td>{new Date(event.Time).toLocaleString()}</td>
+                      <td>{event.HydrateChance.toFixed(2)}</td>
+                      <td>{event.PotentialHydrateFix !== null ? event.PotentialHydrateFix.toFixed(2) : 'N/A'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {/* Customize Settings Modal */}
           <Modal
             isOpen={isModalOpen}

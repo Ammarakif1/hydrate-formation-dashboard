@@ -25,6 +25,7 @@ class DataPoint:
         self.setpointVolume = setpointVolume
         self.valvePercentOpen = valvePercentOpen
         self.hydrateChance = 0  # Initialize hydrate chance
+        self.potentialHydrateFix = None  # Initialize potential hydrate fix
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -73,7 +74,7 @@ def readData(fileName):
 
     return dataPoints
 
-# Insert your detailed detectHydrateFormation function here
+# Your existing detectHydrateFormation function (unchanged)
 def detectHydrateFormation(dataPoints, time_lag=3):
     TARGET_TOLERANCE = 0.1
     VOLUME_DERIVATIVE_THRESHOLD = -0.05
@@ -163,6 +164,21 @@ def detectHydrateFormation(dataPoints, time_lag=3):
 
     return hydrate_times, normal_times
 
+# Updated function to calculate PotentialHydrateFix with 20% reduction
+def calculatePotentialHydrateFix(dataPoints):
+    if not dataPoints:
+        return dataPoints
+
+    # Calculate the average ValvePercentOpen across all data points
+    average_valve_percent_open = sum(dp.valvePercentOpen for dp in dataPoints) / len(dataPoints)
+
+    for dp in dataPoints:
+        if dp.hydrateChance >= 80:
+            dp.potentialHydrateFix = max(average_valve_percent_open * 0.80, 0)  # Reduce by 20%, not below 0%
+        else:
+            dp.potentialHydrateFix = None  # Set to None when hydrateChance < 80
+    return dataPoints
+
 @app.route('/api/hydrate_data', methods=['POST'])
 def get_hydrate_data():
     if 'file' not in request.files:
@@ -181,23 +197,40 @@ def get_hydrate_data():
         dataPoints = readData(filepath)
         hydrate_times, normal_times = detectHydrateFormation(dataPoints)
 
+        dataPoints = calculatePotentialHydrateFix(dataPoints)  # Calculate PotentialHydrateFix
+
         os.remove(filepath)
 
         data_list = []
+        hydrate_events = []  # List to store all hydrate instances
+
         for dp in dataPoints:
             try:
                 time_iso = datetime.strptime(dp.time, '%m/%d/%Y %I:%M:%S %p').isoformat()
             except ValueError:
                 time_iso = dp.time
-            data_list.append({
+            data_entry = {
                 'Time': time_iso,
                 'InstantaneousVolume': dp.instantaneousVolume,
                 'SetpointVolume': dp.setpointVolume,
                 'ValvePercentOpen': dp.valvePercentOpen,
-                'HydrateChance': dp.hydrateChance
-            })
+                'HydrateChance': dp.hydrateChance,
+                'PotentialHydrateFix': dp.potentialHydrateFix
+            }
+            data_list.append(data_entry)
 
-        return jsonify(data_list)
+            # If HydrateChance is 80% or higher, add to hydrate_events
+            if dp.hydrateChance >= 80:
+                hydrate_events.append({
+                    'Time': time_iso,
+                    'HydrateChance': dp.hydrateChance,
+                    'PotentialHydrateFix': dp.potentialHydrateFix
+                })
+
+        return jsonify({
+            'data': data_list,
+            'hydrateEvents': hydrate_events
+        })
     else:
         return jsonify({'error': 'Invalid file type'}), 400
 
