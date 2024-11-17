@@ -1,0 +1,96 @@
+/* HydrateChart.css */
+
+.hydrate-chart-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.hydrate-chart-title {
+  text-align: center;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.file-upload-section {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.file-upload-section input[type="file"] {
+  margin-right: 10px;
+}
+
+.file-upload-section button {
+  padding: 5px 10px;
+}
+
+.chart-container {
+  width: 100%;
+  height: 600px;
+  position: relative;
+}
+
+.loading-message {
+  text-align: center;
+  font-size: 18px;
+  margin-top: 20px;
+}
+
+.error-message {
+  color: red;
+  text-align: center;
+  margin-top: 20px;
+}
+
+.chart-controls {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.chart-controls button {
+  margin: 0 5px;
+  padding: 10px;
+  font-size: 20px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.chart-controls button:hover {
+  color: #007BFF; /* Change color on hover */
+}
+
+.chart-controls button:focus {
+  outline: none;
+}
+
+/* Modal styling */
+.ReactModal__Overlay {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.ReactModal__Content {
+  width: 400px;
+  margin: auto;
+  padding: 20px;
+  position: relative;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-buttons button {
+  margin-left: 10px;
+}
